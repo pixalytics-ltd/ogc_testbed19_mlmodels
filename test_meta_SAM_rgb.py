@@ -6,8 +6,9 @@ import torch
 from segment_anything import sam_model_registry, SamAutomaticMaskGenerator
 
 home = os.path.expanduser("~")
-IMAGE_PATH = os.path.join(home, "shared/testbed19")
-CHECKPOINT_PATH = os.path.join(IMAGE_PATH, "checkpoint")
+ROOT = os.path.join(home, "shared/testbed19/")
+IMAGE_PATH = os.path.join(ROOT, "CHRIS")
+CHECKPOINT_PATH = os.path.join(ROOT, "sam_vit_h_4b8939.pth")
 
 
 def save_png(image_bgr, result, outfile):
@@ -23,12 +24,19 @@ def save_png(image_bgr, result, outfile):
     # Write
     cv2.imwrite(outfile, image)
 
+    return image
+
 
 def run_meta_sam(image_rgb):
+
+    # Check whether GPUs are accessible
+    #os.system("nvidia-smi")
+
+    # Setup where to use GPUs and model types
     DEVICE = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
     MODEL_TYPE = "vit_h"
 
-    sam = sam_model_registry[MODEL_TYPE]()  # checkpoint=CHECKPOINT_PATH)
+    sam = sam_model_registry[MODEL_TYPE](checkpoint=CHECKPOINT_PATH)
     sam.to(device=DEVICE)
 
     # Generate mask
@@ -57,7 +65,16 @@ def main():
         outfile = os.path.join(IMAGE_PATH, 'output_rgb.png')
         if os.path.exists(outfile):
             os.remove(outfile)
-        save_png(image_bgr, result, outfile)
+
+        # Save annotated png
+        annotated_image = save_png(image_bgr, result, outfile)
+
+        # Display results
+        sv.plot_images_grid(
+            images=[image_bgr, annotated_image],
+            grid_size=(1, 2),
+            titles=['source image', 'segmented image'])
+
     else:
         print("No result returned: {}".format(result))
 
