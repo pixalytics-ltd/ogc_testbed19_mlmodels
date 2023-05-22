@@ -12,5 +12,5 @@ dependencies:
   - pip:
     - opencv-python
     - roboflow
-    - supervision
+    - supervision==0.5.0
 prefix: ~/anaconda3/envs/t19_env
