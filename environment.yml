@@ -1,0 +1,16 @@
+name: t19_env
+channels:
+  - conda-forge
+  - defaults
+dependencies:
+  - libjpeg-turbo
+  - libpng
+  - pip
+  - python>=3.9
+  - pytorch
+  - torchvision
+  - pip:
+    - opencv-python
+    - roboflow
+    - supervision==0.5.0
+prefix: ~/anaconda3/envs/t19_env
