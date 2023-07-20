@@ -3,14 +3,16 @@ channels:
   - conda-forge
   - defaults
 dependencies:
+  - h5py
   - libjpeg-turbo
   - libpng
   - pip
   - python>=3.9
   - pytorch
+  - scikit-learn
   - torchvision
   - pip:
     - opencv-python
     - roboflow
-    - supervision==0.5.0
+    - supervision==0.11.0
 prefix: ~/anaconda3/envs/t19_env
