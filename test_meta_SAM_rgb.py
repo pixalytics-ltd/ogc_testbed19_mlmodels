@@ -1,6 +1,7 @@
 import os
 import sys
 import numpy as np
+import pickle
 import cv2
 import h5py
 from sklearn import preprocessing
@@ -98,6 +99,17 @@ def main():
     pca = False
     hloop = True
 
+    # Setup filenames
+    if pca:
+        outimg = 'output_hyp_pca.png'
+    elif hloop:
+        outimg = 'output_hyp_loops.png'
+    else:
+        outimg = 'output_rgb.png'
+    outpng = os.path.join(IMAGE_PATH, outimg)
+    restore = False
+    outpi = outpng.replace(".png",".obj")
+
     if pca or hloop:
         inhyp = os.path.join(IMAGE_PATH, 'CHRIS_BR_220607_8FDD_41_NR_TOA_REFL_GC.h5')
         if not os.path.exists(inhyp):
@@ -115,124 +127,145 @@ def main():
 
     # Read TIFF input file
     if pca:
-        # Read in CHRIS data from HDF file
-        data = read_chris(inhyp)
-        bands, ny, nx = data.shape
+        if os.path.exists(outpi):
+            restore = True
+            pifile = open(outpi, 'rb')
+            detections = pickle.load(pifile)
 
-        # Flatten to 2D array suitable for PCA
-        # features (bands) as columns and (pixels) samples
-        data_2d = data.reshape(bands, ny * nx)
-        print("data: {} flattened data: {}".format(data.shape, data_2d.shape))
+        else:
+            # Read in CHRIS data from HDF file
+            data = read_chris(inhyp)
+            bands, ny, nx = data.shape
 
-        # Normalise the data
-        scaler = preprocessing.MinMaxScaler()
-        scaled = scaler.fit_transform(data_2d)
+            # Flatten to 2D array suitable for PCA
+            # features (bands) as columns and (pixels) samples
+            data_2d = data.reshape(bands, ny * nx)
+            print("data: {} flattened data: {}".format(data.shape, data_2d.shape))
 
-        # Run PCA
-        pca = PCA(n_components=n_components)
-        result = pca.fit_transform(scaled)
+            # Normalise the data
+            scaler = preprocessing.MinMaxScaler()
+            scaled = scaler.fit_transform(data_2d)
 
-        # Reconstruct original images
-        # pca_data_d2 = pca.inverse_transform(result)
-        pca_comp = pca.components_
-        minv = np.nanmin(pca_comp)
-        maxv = np.nanmax(pca_comp)
-        print("PCA output: {} min {:.3f} max {:.3f}".format(pca_comp.shape, minv, maxv))
+            # Run PCA
+            pca = PCA(n_components=n_components)
+            result = pca.fit_transform(scaled)
 
-        # Reconstruct as 2D image
-        pca_data_d2 = pca_comp.reshape(n_components, ny, nx)
+            # Reconstruct original images
+            # pca_data_d2 = pca.inverse_transform(result)
+            pca_comp = pca.components_
+            minv = np.nanmin(pca_comp)
+            maxv = np.nanmax(pca_comp)
+            print("PCA output: {} min {:.3f} max {:.3f}".format(pca_comp.shape, minv, maxv))
 
-        # Reorder then apply scaling so can be integers
-        image_pca = np.moveaxis(pca_data_d2, 0, -1)
-        image_pca = np.subtract(image_pca, minv)
-        image_pca = np.multiply(image_pca, 255 / (maxv - minv))
+            # Reconstruct as 2D image
+            pca_data_d2 = pca_comp.reshape(n_components, ny, nx)
 
-        print("PCA input for SAM model: {} min {} max {}".format(image_pca.shape, np.nanmin(image_pca),
-                                                                 np.nanmax(image_pca)))
+            # Reorder then apply scaling so can be integers
+            image_pca = np.moveaxis(pca_data_d2, 0, -1)
+            image_pca = np.subtract(image_pca, minv)
+            image_pca = np.multiply(image_pca, 255 / (maxv - minv))
 
-        # Save PCA components
-        pca_sav = save_png(image_pca, image_pca, os.path.join(IMAGE_PATH, 'output_pca.png'), annotate=False)
-        # sys.exit(1)
+            print("PCA input for SAM model: {} min {} max {}".format(image_pca.shape, np.nanmin(image_pca),
+                                                                     np.nanmax(image_pca)))
 
-        # Run the SAM model
-        print("Running SAM model")
-        result = run_meta_sam(image_pca.astype(np.uint8))
-        # print("Result: ", result)
+            # Save PCA components
+            pca_sav = save_png(image_pca, image_pca, os.path.join(IMAGE_PATH, 'output_pca.png'), annotate=False)
+            # sys.exit(1)
 
-        # Extract detections
-        detections = sv.Detections.from_sam(result)
+            # Run the SAM model
+            print("Running SAM model")
+            result = run_meta_sam(image_pca.astype(np.uint8))
+            # print("Result: ", result)
+
+            # Extract detections
+            detections = sv.Detections.from_sam(result)
 
 
     elif hloop:  # Loop multiple band combinations
 
-        # Read in CHRIS data from HDF file
-        data = read_chris(inhyp)
-        bands, ny, nx = data.shape
+        if os.path.exists(outpi):
+            restore = True
+            pifile = open(outpi, 'rb')
+            detections = pickle.load(pifile)
 
-        # Reorder then apply scaling so can be integers
-        minv = np.nanmin(data)
-        maxv = np.nanmax(data)
-        hyp_data = np.moveaxis(data, 0, -1)
-        hyp_data = np.subtract(hyp_data, minv)
-        hyp_data = np.multiply(hyp_data, 255 / (maxv - minv))
-        del data
+        else:
 
-        nloops = 5
-        for l in range(nloops):
+            # Read in CHRIS data from HDF file
+            data = read_chris(inhyp)
+            bands, ny, nx = data.shape
 
-            # Extract 3 bands
-            # BGR is 2, 13, 23
-            i = [[l], [l + 10 + 1], [l + 20 + 1]]
-            image_rgb = hyp_data[:, :, i].reshape(ny, nx, 3)
+            # Reorder then apply scaling so can be integers
+            minv = np.nanmin(data)
+            maxv = np.nanmax(data)
+            hyp_data = np.moveaxis(data, 0, -1)
+            hyp_data = np.subtract(hyp_data, minv)
+            hyp_data = np.multiply(hyp_data, 255 / (maxv - minv))
+            del data
+
+            loop = 0
+            topband = 0
+            while topband < bands:
+
+                # Extract 3 bands
+                # BGR is 2, 13, 23 so seperate 3 bands similary
+                i = [[loop], [loop + 10 + 1], [loop + 20 + 1]]
+                topband = loop + 20 + 1
+                image_rgb = hyp_data[:, :, i].reshape(ny, nx, 3)
+
+                # Run the SAM model
+                print("Running SAM model for iteration {}".format(loop))
+                result = run_meta_sam(image_rgb.astype(np.uint8))
+                # print("Result: ", result)
+
+                # Extract detections
+                iter_detections = sv.Detections.from_sam(result)
+
+                # Merge detections
+                if loop == 0:
+                    detections = iter_detections
+                else:
+                    detections = sv.Detections.merge([detections, iter_detections])
+
+                # Iterate loop
+                loop+=1
+
+    else:
+        if os.path.exists(outpi):
+            restore = True
+            pifile = open(outpi, 'rb')
+            detections = pickle.load(pifile)
+
+        else:
+
+            image_rgb = cv2.cvtColor(image_bgr, cv2.COLOR_BGR2RGB)
+            print("RGB input for SAM model: {} min {} max {}".format(image_rgb.shape, np.nanmin(image_rgb), np.nanmax(image_rgb)))
 
             # Run the SAM model
-            print("Running SAM model for iteration {}".format(l))
-            result = run_meta_sam(image_rgb.astype(np.uint8))
+            print("Running SAM model")
+            result = run_meta_sam(image_rgb)
             # print("Result: ", result)
 
             # Extract detections
-            iter_detections = sv.Detections.from_sam(result)
-
-            # Merge detections
-            if l == 0:
-                detections = iter_detections
-            else:
-                detections = sv.Detections.merge([detections, iter_detections])
-
-
-    else:
-        image_rgb = cv2.cvtColor(image_bgr, cv2.COLOR_BGR2RGB)
-        print("PCA input for SAM model: {} min {} max {}".format(image_rgb.shape, np.nanmin(image_rgb),
-                                                                 np.nanmax(image_rgb)))
-
-        # Run the SAM model
-        print("Running SAM model")
-        result = run_meta_sam(image_rgb)
-        # print("Result: ", result)
-
-        # Extract detections
-        detections = sv.Detections.from_sam(result)
+            detections = sv.Detections.from_sam(result)
 
     # Save to png file
-    if len(result) > 0:
-        if pca:
-            outimg = 'output_hyp_pca.png'
-        elif hloop:
-            outimg = 'output_hyp_{}loops.png'.format(nloops)
-        else:
-            outimg = 'output_rgb.png'
-        outfile = os.path.join(IMAGE_PATH, outimg)
-        if os.path.exists(outfile):
-            os.remove(outfile)
+    if len(detections) > 0:
+        if os.path.exists(outpng):
+            os.remove(outpng)
 
         # Save annotated png
-        annotated_image = save_png(image_bgr, detections, outfile)
+        annotated_image = save_png(image_bgr, detections, outpng)
 
         # Display results
         sv.plot_images_grid(
             images=[image_bgr, annotated_image],
             grid_size=(1, 2),
             titles=['source image', 'segmented image'])
+
+        # Save the detections
+        if not restore:
+            pifile = open(outpi, 'wb')
+            pickle.dump(detections, pifile)
 
     else:
         print("No result returned: {}".format(result))
