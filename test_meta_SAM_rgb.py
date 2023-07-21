@@ -141,10 +141,12 @@ def main():
             # features (bands) as columns and (pixels) samples
             data_2d = data.reshape(bands, ny * nx)
             print("data: {} flattened data: {}".format(data.shape, data_2d.shape))
+            del data
 
             # Normalise the data
             scaler = preprocessing.MinMaxScaler()
             scaled = scaler.fit_transform(data_2d)
+            del data_2d
 
             # Run PCA
             pca = PCA(n_components=n_components)
@@ -158,12 +160,13 @@ def main():
             print("PCA output: {} min {:.3f} max {:.3f}".format(pca_comp.shape, minv, maxv))
 
             # Reconstruct as 2D image
-            pca_data_d2 = pca_comp.reshape(n_components, ny, nx)
+            pca_data_2d = pca_comp.reshape(n_components, ny, nx)
 
             # Reorder then apply scaling so can be integers
-            image_pca = np.moveaxis(pca_data_d2, 0, -1)
+            image_pca = np.moveaxis(pca_data_2d, 0, -1)
             image_pca = np.subtract(image_pca, minv)
             image_pca = np.multiply(image_pca, 255 / (maxv - minv))
+            del pca_data_2d
 
             print("PCA input for SAM model: {} min {} max {}".format(image_pca.shape, np.nanmin(image_pca),
                                                                      np.nanmax(image_pca)))
@@ -208,8 +211,9 @@ def main():
 
                 # Extract 3 bands
                 # BGR is 2, 13, 23 so seperate 3 bands similary
-                i = [[loop], [loop + 10 + 1], [loop + 20 + 1]]
                 topband = loop + 20 + 1
+                i = [[loop], [loop + 10 + 1], [topband]]
+
                 image_rgb = hyp_data[:, :, i].reshape(ny, nx, 3)
 
                 # Run the SAM model
@@ -228,6 +232,8 @@ def main():
 
                 # Iterate loop
                 loop+=1
+
+            del image_rgb, hyp_data
 
     else:
         if os.path.exists(outpi):
